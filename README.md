@@ -1,2 +1,3 @@
-# mcp2515mbed
-MCP 2515 library for ARM mBED devices.
+# mcp2515-mbed
+
+MCP2515 CAN bus library for ARM mbed.
