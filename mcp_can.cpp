@@ -21,7 +21,7 @@ void MCP_CAN::mcp2515_reset(void)
     spi_readwrite(MCP_RESET);
     MCP2515_UNSELECT();
     mcpSPI->unlock();
-    ThisThread::sleep_for(5s); // If the MCP2515 was in sleep mode when the reset command was issued then we need to wait a while for it to reset properly
+    ThisThread::sleep_for(5s);
 }
 
 INT8U MCP_CAN::mcp2515_readRegister(const INT8U address)
@@ -46,7 +46,7 @@ void MCP_CAN::mcp2515_readRegisterS(const INT8U address, INT8U values[], const I
     MCP2515_SELECT();
     spi_readwrite(MCP_READ);
     spi_readwrite(address);
-    // mcp2515 has auto-increment of address-pointer
+
     for (i = 0; i < n; i++)
         values[i] = spi_read();
 
@@ -117,34 +117,21 @@ INT8U MCP_CAN::setMode(const INT8U opMode)
 
 INT8U MCP_CAN::mcp2515_setCANCTRL_Mode(const INT8U newmode)
 {
-    // If the chip is asleep and we want to change mode then a manual wake needs to be done
-    // This is done by setting the wake up interrupt flag
-    // This undocumented trick was found at https://github.com/mkleemann/can/blob/master/can_sleep_mcp2515.c
     if ((mcp2515_readRegister(MCP_CANSTAT) & MODE_MASK) == MCP_SLEEP && newmode != MCP_SLEEP)
     {
-        // Make sure wake interrupt is enabled
         uint8_t wakeIntEnabled = (mcp2515_readRegister(MCP_CANINTE) & MCP_WAKIF);
         if (!wakeIntEnabled)
             mcp2515_modifyRegister(MCP_CANINTE, MCP_WAKIF, MCP_WAKIF);
 
-        // Set wake flag (this does the actual waking up)
         mcp2515_modifyRegister(MCP_CANINTF, MCP_WAKIF, MCP_WAKIF);
-
-        // Wait for the chip to exit SLEEP and enter LISTENONLY mode.
-
-        // If the chip is not connected to a CAN bus (or the bus has no other powered nodes) it will sometimes trigger the wake interrupt as soon
-        // as it's put to sleep, but it will stay in SLEEP mode instead of automatically switching to LISTENONLY mode.
-        // In this situation the mode needs to be manually set to LISTENONLY.
 
         if (mcp2515_requestNewMode(MCP_LISTENONLY) != MCP2515_OK)
             return MCP2515_FAIL;
 
-        // Turn wake interrupt back off if it was originally off
         if (!wakeIntEnabled)
             mcp2515_modifyRegister(MCP_CANINTE, MCP_WAKIF, 0);
     }
 
-    // Clear wake flag
     mcp2515_modifyRegister(MCP_CANINTF, MCP_WAKIF, 0);
 
     return mcp2515_requestNewMode(newmode);
@@ -153,19 +140,16 @@ INT8U MCP_CAN::mcp2515_setCANCTRL_Mode(const INT8U newmode)
 INT8U MCP_CAN::mcp2515_requestNewMode(const INT8U newmode)
 {
     Timer timer;
-    timer.start(); // Start the timer
+    timer.start();
 
-    // Spam new mode request and wait for the operation to complete
     while (1)
     {
-        // Request new mode
-        // This is inside the loop as sometimes requesting the new mode once doesn't work (usually when attempting to sleep)
         mcp2515_modifyRegister(MCP_CANCTRL, MODE_MASK, newmode);
 
         uint8_t statReg = mcp2515_readRegister(MCP_CANSTAT);
-        if ((statReg & MODE_MASK) == newmode) // We're now in the new mode
+        if ((statReg & MODE_MASK) == newmode)
             return MCP2515_OK;
-        else if (timer.elapsed_time().count() > 200000) // Wait no more than 200ms for the operation to complete
+        else if (timer.elapsed_time().count() > 200000)
             return MCP2515_FAIL;
     }
 }
@@ -179,85 +163,85 @@ INT8U MCP_CAN::mcp2515_configRate(const INT8U canSpeed, const INT8U canClock)
     case (MCP_8MHZ):
         switch (canSpeed)
         {
-        case (CAN_5KBPS): //   5KBPS
+        case (CAN_5KBPS):
             cfg1 = MCP_8MHz_5kBPS_CFG1;
             cfg2 = MCP_8MHz_5kBPS_CFG2;
             cfg3 = MCP_8MHz_5kBPS_CFG3;
             break;
 
-        case (CAN_10KBPS): //  10KBPS
+        case (CAN_10KBPS):
             cfg1 = MCP_8MHz_10kBPS_CFG1;
             cfg2 = MCP_8MHz_10kBPS_CFG2;
             cfg3 = MCP_8MHz_10kBPS_CFG3;
             break;
 
-        case (CAN_20KBPS): //  20KBPS
+        case (CAN_20KBPS):
             cfg1 = MCP_8MHz_20kBPS_CFG1;
             cfg2 = MCP_8MHz_20kBPS_CFG2;
             cfg3 = MCP_8MHz_20kBPS_CFG3;
             break;
 
-        case (CAN_31K25BPS): //  31.25KBPS
+        case (CAN_31K25BPS):
             cfg1 = MCP_8MHz_31k25BPS_CFG1;
             cfg2 = MCP_8MHz_31k25BPS_CFG2;
             cfg3 = MCP_8MHz_31k25BPS_CFG3;
             break;
 
-        case (CAN_33K3BPS): //  33.33KBPS
+        case (CAN_33K3BPS):
             cfg1 = MCP_8MHz_33k3BPS_CFG1;
             cfg2 = MCP_8MHz_33k3BPS_CFG2;
             cfg3 = MCP_8MHz_33k3BPS_CFG3;
             break;
 
-        case (CAN_40KBPS): //  40Kbps
+        case (CAN_40KBPS):
             cfg1 = MCP_8MHz_40kBPS_CFG1;
             cfg2 = MCP_8MHz_40kBPS_CFG2;
             cfg3 = MCP_8MHz_40kBPS_CFG3;
             break;
 
-        case (CAN_50KBPS): //  50Kbps
+        case (CAN_50KBPS):
             cfg1 = MCP_8MHz_50kBPS_CFG1;
             cfg2 = MCP_8MHz_50kBPS_CFG2;
             cfg3 = MCP_8MHz_50kBPS_CFG3;
             break;
 
-        case (CAN_80KBPS): //  80Kbps
+        case (CAN_80KBPS):
             cfg1 = MCP_8MHz_80kBPS_CFG1;
             cfg2 = MCP_8MHz_80kBPS_CFG2;
             cfg3 = MCP_8MHz_80kBPS_CFG3;
             break;
 
-        case (CAN_100KBPS): // 100Kbps
+        case (CAN_100KBPS):
             cfg1 = MCP_8MHz_100kBPS_CFG1;
             cfg2 = MCP_8MHz_100kBPS_CFG2;
             cfg3 = MCP_8MHz_100kBPS_CFG3;
             break;
 
-        case (CAN_125KBPS): // 125Kbps
+        case (CAN_125KBPS):
             cfg1 = MCP_8MHz_125kBPS_CFG1;
             cfg2 = MCP_8MHz_125kBPS_CFG2;
             cfg3 = MCP_8MHz_125kBPS_CFG3;
             break;
 
-        case (CAN_200KBPS): // 200Kbps
+        case (CAN_200KBPS):
             cfg1 = MCP_8MHz_200kBPS_CFG1;
             cfg2 = MCP_8MHz_200kBPS_CFG2;
             cfg3 = MCP_8MHz_200kBPS_CFG3;
             break;
 
-        case (CAN_250KBPS): // 250Kbps
+        case (CAN_250KBPS):
             cfg1 = MCP_8MHz_250kBPS_CFG1;
             cfg2 = MCP_8MHz_250kBPS_CFG2;
             cfg3 = MCP_8MHz_250kBPS_CFG3;
             break;
 
-        case (CAN_500KBPS): // 500Kbps
+        case (CAN_500KBPS):
             cfg1 = MCP_8MHz_500kBPS_CFG1;
             cfg2 = MCP_8MHz_500kBPS_CFG2;
             cfg3 = MCP_8MHz_500kBPS_CFG3;
             break;
 
-        case (CAN_1000KBPS): //   1Mbps
+        case (CAN_1000KBPS):
             cfg1 = MCP_8MHz_1000kBPS_CFG1;
             cfg2 = MCP_8MHz_1000kBPS_CFG2;
             cfg3 = MCP_8MHz_1000kBPS_CFG3;
@@ -273,78 +257,78 @@ INT8U MCP_CAN::mcp2515_configRate(const INT8U canSpeed, const INT8U canClock)
     case (MCP_16MHZ):
         switch (canSpeed)
         {
-        case (CAN_5KBPS): //   5Kbps
+        case (CAN_5KBPS):
             cfg1 = MCP_16MHz_5kBPS_CFG1;
             cfg2 = MCP_16MHz_5kBPS_CFG2;
             cfg3 = MCP_16MHz_5kBPS_CFG3;
             break;
 
-        case (CAN_10KBPS): //  10Kbps
+        case (CAN_10KBPS):
             cfg1 = MCP_16MHz_10kBPS_CFG1;
             cfg2 = MCP_16MHz_10kBPS_CFG2;
             cfg3 = MCP_16MHz_10kBPS_CFG3;
             break;
 
-        case (CAN_20KBPS): //  20Kbps
+        case (CAN_20KBPS):
             cfg1 = MCP_16MHz_20kBPS_CFG1;
             cfg2 = MCP_16MHz_20kBPS_CFG2;
             cfg3 = MCP_16MHz_20kBPS_CFG3;
             break;
 
-        case (CAN_33K3BPS): //  20Kbps
+        case (CAN_33K3BPS):
             cfg1 = MCP_16MHz_33k3BPS_CFG1;
             cfg2 = MCP_16MHz_33k3BPS_CFG2;
             cfg3 = MCP_16MHz_33k3BPS_CFG3;
             break;
 
-        case (CAN_40KBPS): //  40Kbps
+        case (CAN_40KBPS):
             cfg1 = MCP_16MHz_40kBPS_CFG1;
             cfg2 = MCP_16MHz_40kBPS_CFG2;
             cfg3 = MCP_16MHz_40kBPS_CFG3;
             break;
 
-        case (CAN_50KBPS): //  50Kbps
+        case (CAN_50KBPS):
             cfg2 = MCP_16MHz_50kBPS_CFG2;
             cfg3 = MCP_16MHz_50kBPS_CFG3;
             break;
 
-        case (CAN_80KBPS): //  80Kbps
+        case (CAN_80KBPS):
             cfg1 = MCP_16MHz_80kBPS_CFG1;
             cfg2 = MCP_16MHz_80kBPS_CFG2;
             cfg3 = MCP_16MHz_80kBPS_CFG3;
             break;
 
-        case (CAN_100KBPS): // 100Kbps
+        case (CAN_100KBPS):
             cfg1 = MCP_16MHz_100kBPS_CFG1;
             cfg2 = MCP_16MHz_100kBPS_CFG2;
             cfg3 = MCP_16MHz_100kBPS_CFG3;
             break;
 
-        case (CAN_125KBPS): // 125Kbps
+        case (CAN_125KBPS):
             cfg1 = MCP_16MHz_125kBPS_CFG1;
             cfg2 = MCP_16MHz_125kBPS_CFG2;
             cfg3 = MCP_16MHz_125kBPS_CFG3;
             break;
 
-        case (CAN_200KBPS): // 200Kbps
+        case (CAN_200KBPS):
             cfg1 = MCP_16MHz_200kBPS_CFG1;
             cfg2 = MCP_16MHz_200kBPS_CFG2;
             cfg3 = MCP_16MHz_200kBPS_CFG3;
             break;
 
-        case (CAN_250KBPS): // 250Kbps
+        case (CAN_250KBPS):
             cfg1 = MCP_16MHz_250kBPS_CFG1;
             cfg2 = MCP_16MHz_250kBPS_CFG2;
             cfg3 = MCP_16MHz_250kBPS_CFG3;
             break;
 
-        case (CAN_500KBPS): // 500Kbps
+        case (CAN_500KBPS):
             cfg1 = MCP_16MHz_500kBPS_CFG1;
             cfg2 = MCP_16MHz_500kBPS_CFG2;
             cfg3 = MCP_16MHz_500kBPS_CFG3;
             break;
 
-        case (CAN_1000KBPS): //   1Mbps
+        case (CAN_1000KBPS):
             cfg1 = MCP_16MHz_1000kBPS_CFG1;
             cfg2 = MCP_16MHz_1000kBPS_CFG2;
             cfg3 = MCP_16MHz_1000kBPS_CFG3;
@@ -360,55 +344,55 @@ INT8U MCP_CAN::mcp2515_configRate(const INT8U canSpeed, const INT8U canClock)
     case (MCP_20MHZ):
         switch (canSpeed)
         {
-        case (CAN_40KBPS): //  40Kbps
+        case (CAN_40KBPS):
             cfg1 = MCP_20MHz_40kBPS_CFG1;
             cfg2 = MCP_20MHz_40kBPS_CFG2;
             cfg3 = MCP_20MHz_40kBPS_CFG3;
             break;
 
-        case (CAN_50KBPS): //  50Kbps
+        case (CAN_50KBPS):
             cfg1 = MCP_20MHz_50kBPS_CFG1;
             cfg2 = MCP_20MHz_50kBPS_CFG2;
             cfg3 = MCP_20MHz_50kBPS_CFG3;
             break;
 
-        case (CAN_80KBPS): //  80Kbps
+        case (CAN_80KBPS):
             cfg1 = MCP_20MHz_80kBPS_CFG1;
             cfg2 = MCP_20MHz_80kBPS_CFG2;
             cfg3 = MCP_20MHz_80kBPS_CFG3;
             break;
 
-        case (CAN_100KBPS): // 100Kbps
+        case (CAN_100KBPS):
             cfg1 = MCP_20MHz_100kBPS_CFG1;
             cfg2 = MCP_20MHz_100kBPS_CFG2;
             cfg3 = MCP_20MHz_100kBPS_CFG3;
             break;
 
-        case (CAN_125KBPS): // 125Kbps
+        case (CAN_125KBPS):
             cfg1 = MCP_20MHz_125kBPS_CFG1;
             cfg2 = MCP_20MHz_125kBPS_CFG2;
             cfg3 = MCP_20MHz_125kBPS_CFG3;
             break;
 
-        case (CAN_200KBPS): // 200Kbps
+        case (CAN_200KBPS):
             cfg1 = MCP_20MHz_200kBPS_CFG1;
             cfg2 = MCP_20MHz_200kBPS_CFG2;
             cfg3 = MCP_20MHz_200kBPS_CFG3;
             break;
 
-        case (CAN_250KBPS): // 250Kbps
+        case (CAN_250KBPS):
             cfg1 = MCP_20MHz_250kBPS_CFG1;
             cfg2 = MCP_20MHz_250kBPS_CFG2;
             cfg3 = MCP_20MHz_250kBPS_CFG3;
             break;
 
-        case (CAN_500KBPS): // 500Kbps
+        case (CAN_500KBPS):
             cfg1 = MCP_20MHz_500kBPS_CFG1;
             cfg2 = MCP_20MHz_500kBPS_CFG2;
             cfg3 = MCP_20MHz_500kBPS_CFG3;
             break;
 
-        case (CAN_1000KBPS): //   1Mbps
+        case (CAN_1000KBPS):
             cfg1 = MCP_20MHz_1000kBPS_CFG1;
             cfg2 = MCP_20MHz_1000kBPS_CFG2;
             cfg3 = MCP_20MHz_1000kBPS_CFG3;
@@ -451,25 +435,21 @@ void MCP_CAN::mcp2515_initCANBuffers(void)
     INT8U ext = 1;
     INT32U ulMask = 0x00, ulFilt = 0x00;
 
-    mcp2515_write_mf(MCP_RXM0SIDH, ext, ulMask); /*Set both masks to 0           */
-    mcp2515_write_mf(MCP_RXM1SIDH, ext, ulMask); /*Mask register ignores ext bit */
+    mcp2515_write_mf(MCP_RXM0SIDH, ext, ulMask);
+    mcp2515_write_mf(MCP_RXM1SIDH, ext, ulMask);
 
-    /* Set all filters to 0         */
-    mcp2515_write_mf(MCP_RXF0SIDH, ext, ulFilt); /* RXB0: extended               */
-    mcp2515_write_mf(MCP_RXF1SIDH, std, ulFilt); /* RXB1: standard               */
-    mcp2515_write_mf(MCP_RXF2SIDH, ext, ulFilt); /* RXB2: extended               */
-    mcp2515_write_mf(MCP_RXF3SIDH, std, ulFilt); /* RXB3: standard               */
+    mcp2515_write_mf(MCP_RXF0SIDH, ext, ulFilt);
+    mcp2515_write_mf(MCP_RXF1SIDH, std, ulFilt);
+    mcp2515_write_mf(MCP_RXF2SIDH, ext, ulFilt);
+    mcp2515_write_mf(MCP_RXF3SIDH, std, ulFilt);
     mcp2515_write_mf(MCP_RXF4SIDH, ext, ulFilt);
     mcp2515_write_mf(MCP_RXF5SIDH, std, ulFilt);
 
-    /* Clear, deactivate the three  */
-    /* transmit buffers             */
-    /* TXBnCTRL -> TXBnD7           */
     a1 = MCP_TXB0CTRL;
     a2 = MCP_TXB1CTRL;
     a3 = MCP_TXB2CTRL;
     for (i = 0; i < 14; i++)
-    { /* in-buffer loop               */
+    {
         mcp2515_setRegister(a1, 0);
         mcp2515_setRegister(a2, 0);
         mcp2515_setRegister(a3, 0);
@@ -483,7 +463,6 @@ void MCP_CAN::mcp2515_initCANBuffers(void)
 
 INT8U MCP_CAN::mcp2515_init(const INT8U canIDMode, const INT8U canSpeed, const INT8U canClock)
 {
-
     INT8U res;
 
     mcp2515_reset();
@@ -502,7 +481,6 @@ INT8U MCP_CAN::mcp2515_init(const INT8U canIDMode, const INT8U canSpeed, const I
     printf("Entering Configuration Mode Successful! \n");
 #endif
 
-    // Set Baudrate
     if (mcp2515_configRate(canSpeed, canClock))
     {
 #if DEBUG_MODE
@@ -516,16 +494,12 @@ INT8U MCP_CAN::mcp2515_init(const INT8U canIDMode, const INT8U canSpeed, const I
 
     if (res == MCP2515_OK)
     {
-
-        /* init canbuffers              */
         mcp2515_initCANBuffers();
 
-        /* interrupt mode               */
         mcp2515_setRegister(MCP_CANINTE, MCP_RX0IF | MCP_RX1IF);
 
-        // Sets BF pins as GPO
         mcp2515_setRegister(MCP_BFPCTRL, MCP_BxBFS_MASK | MCP_BxBFE_MASK);
-        // Sets RTS pins as GPI
+
         mcp2515_setRegister(MCP_TXRTSCTRL, 0x00);
 
         switch (canIDMode)
@@ -537,23 +511,7 @@ INT8U MCP_CAN::mcp2515_init(const INT8U canIDMode, const INT8U canSpeed, const I
             mcp2515_modifyRegister(MCP_RXB1CTRL, MCP_RXB_RX_MASK,
                                    MCP_RXB_RX_ANY);
             break;
-            /*          The followingn two functions of the MCP2515 do not work, there is a bug in the silicon.
-                        case (MCP_STD):
-                        mcp2515_modifyRegister(MCP_RXB0CTRL,
-                        MCP_RXB_RX_MASK | MCP_RXB_BUKT_MASK,
-                        MCP_RXB_RX_STD | MCP_RXB_BUKT_MASK );
-                        mcp2515_modifyRegister(MCP_RXB1CTRL, MCP_RXB_RX_MASK,
-                        MCP_RXB_RX_STD);
-                        break;
 
-                        case (MCP_EXT):
-                        mcp2515_modifyRegister(MCP_RXB0CTRL,
-                        MCP_RXB_RX_MASK | MCP_RXB_BUKT_MASK,
-                        MCP_RXB_RX_EXT | MCP_RXB_BUKT_MASK );
-                        mcp2515_modifyRegister(MCP_RXB1CTRL, MCP_RXB_RX_MASK,
-                        MCP_RXB_RX_EXT);
-                        break;
-            */
         case (MCP_STDEXT):
             mcp2515_modifyRegister(MCP_RXB0CTRL,
                                    MCP_RXB_RX_MASK | MCP_RXB_BUKT_MASK,
@@ -652,7 +610,6 @@ void MCP_CAN::mcp2515_read_id(const INT8U mcp_addr, INT8U *ext, INT32U *id)
 
     if ((tbufdata[MCP_SIDL] & MCP_TXB_EXIDE_M) == MCP_TXB_EXIDE_M)
     {
-        /* extended id                  */
         *id = (*id << 2) + (tbufdata[MCP_SIDL] & 0x03);
         *id = (*id << 8) + tbufdata[MCP_EID8];
         *id = (*id << 8) + tbufdata[MCP_EID0];
@@ -664,16 +621,16 @@ void MCP_CAN::mcp2515_write_canMsg(const INT8U buffer_sidh_addr)
 {
     INT8U mcp_addr;
     mcp_addr = buffer_sidh_addr;
-    mcp2515_setRegisterS(mcp_addr + 5, m_nDta, m_nDlc); /* write data bytes             */
+    mcp2515_setRegisterS(mcp_addr + 5, m_nDta, m_nDlc);
 
-    if (m_nRtr == 1) /* if RTR set bit in uint8_t       */
+    if (m_nRtr == 1)
         m_nDlc |= MCP_RTR_MASK;
 
-    mcp2515_setRegister((mcp_addr + 4), m_nDlc);  /* write the RTR and DLC        */
-    mcp2515_write_id(mcp_addr, m_nExtFlg, m_nID); /* write CAN id                 */
+    mcp2515_setRegister((mcp_addr + 4), m_nDlc);
+    mcp2515_write_id(mcp_addr, m_nExtFlg, m_nID);
 }
 
-void MCP_CAN::mcp2515_read_canMsg(const INT8U buffer_sidh_addr) /* read can msg                 */
+void MCP_CAN::mcp2515_read_canMsg(const INT8U buffer_sidh_addr)
 {
     INT8U mcp_addr, ctrl;
 
@@ -693,7 +650,7 @@ void MCP_CAN::mcp2515_read_canMsg(const INT8U buffer_sidh_addr) /* read can msg 
     mcp2515_readRegisterS(mcp_addr + 5, &(m_nDta[0]), m_nDlc);
 }
 
-INT8U MCP_CAN::mcp2515_getNextFreeTXBuf(INT8U *txbuf_n) /* get Next free txbuf          */
+INT8U MCP_CAN::mcp2515_getNextFreeTXBuf(INT8U *txbuf_n)
 {
     INT8U res, i, ctrlval;
     INT8U ctrlregs[MCP_N_TXBUFFERS] = {MCP_TXB0CTRL, MCP_TXB1CTRL, MCP_TXB2CTRL};
@@ -701,16 +658,15 @@ INT8U MCP_CAN::mcp2515_getNextFreeTXBuf(INT8U *txbuf_n) /* get Next free txbuf  
     res = MCP_ALLTXBUSY;
     *txbuf_n = 0x00;
 
-    /* check all 3 TX-Buffers       */
     for (i = 0; i < MCP_N_TXBUFFERS; i++)
     {
         ctrlval = mcp2515_readRegister(ctrlregs[i]);
         if ((ctrlval & MCP_TXB_TXREQ_M) == 0)
         {
-            *txbuf_n = ctrlregs[i] + 1; /* return SIDH-address of Buffer*/
+            *txbuf_n = ctrlregs[i] + 1;
 
             res = MCP2515_OK;
-            return res; /* ! function exit              */
+            return res;
         }
     }
     return res;
@@ -721,10 +677,10 @@ MCP_CAN::MCP_CAN(SPI *_SPI, DigitalOut *_CS)
     mcpSPI = _SPI;
     MCPCS = _CS;
 
-    MCPCS->write(1); // Assuming you want to start with CS high
+    MCPCS->write(1);
     MCP2515_UNSELECT();
-    mcpSPI->format(8, 0);        // Set SPI format to 8 bits per frame, SPI mode 0
-    mcpSPI->frequency(10000000); // Set SPI frequency to 10 MHz (adjust as needed)
+    mcpSPI->format(8, 0);
+    mcpSPI->frequency(10000000);
 }
 
 INT8U MCP_CAN::begin(INT8U idmodeset, INT8U speedset, INT8U clockset)
@@ -982,30 +938,29 @@ INT8U MCP_CAN::sendMsg()
     INT8U res, res1, txbuf_n;
     Timer timer;
 
-    timer.start(); /* Start the timer */
+    timer.start();
 
-    // 24 * 4 microseconds typical
     do
     {
-        res = mcp2515_getNextFreeTXBuf(&txbuf_n); /* info = addr. */
+        res = mcp2515_getNextFreeTXBuf(&txbuf_n);
     } while (res == MCP_ALLTXBUSY && (timer.elapsed_time().count() < TIMEOUTVALUE));
 
     if (timer.elapsed_time().count() >= TIMEOUTVALUE)
     {
-        return CAN_GETTXBFTIMEOUT; /* get tx buff time out */
+        return CAN_GETTXBFTIMEOUT;
     }
 
-    timer.reset(); /* Reset the timer */
+    timer.reset();
     mcp2515_write_canMsg(txbuf_n);
     mcp2515_modifyRegister(txbuf_n - 1, MCP_TXB_TXREQ_M, MCP_TXB_TXREQ_M);
 
     do
     {
-        res1 = mcp2515_readRegister(txbuf_n - 1); /* read send buff ctrl reg */
+        res1 = mcp2515_readRegister(txbuf_n - 1);
         res1 = res1 & 0x08;
     } while (res1 && (timer.elapsed_time().count() < TIMEOUTVALUE));
 
-    if (timer.elapsed_time().count() >= TIMEOUTVALUE) /* send msg timeout */
+    if (timer.elapsed_time().count() >= TIMEOUTVALUE)
         return CAN_SENDMSGTIMEOUT;
 
     return CAN_OK;
@@ -1044,13 +999,13 @@ INT8U MCP_CAN::readMsg()
 
     stat = mcp2515_readStatus();
 
-    if (stat & MCP_STAT_RX0IF) /* Msg in Buffer 0              */
+    if (stat & MCP_STAT_RX0IF)
     {
         mcp2515_read_canMsg(MCP_RXBUF_0);
         mcp2515_modifyRegister(MCP_CANINTF, MCP_RX0IF, 0);
         res = CAN_OK;
     }
-    else if (stat & MCP_STAT_RX1IF) /* Msg in Buffer 1              */
+    else if (stat & MCP_STAT_RX1IF)
     {
         mcp2515_read_canMsg(MCP_RXBUF_1);
         mcp2515_modifyRegister(MCP_CANINTF, MCP_RX1IF, 0);
@@ -1099,7 +1054,7 @@ INT8U MCP_CAN::readMsgBuf(INT32U *id, INT8U *len, INT8U buf[])
 INT8U MCP_CAN::checkReceive(void)
 {
     INT8U res;
-    res = mcp2515_readStatus(); /* RXnIF in Bit 1 and 0         */
+    res = mcp2515_readStatus();
     if (res & MCP_STAT_RXIF_MASK)
         return CAN_MSGAVAIL;
     else
@@ -1153,7 +1108,6 @@ INT8U MCP_CAN::abortTX(void)
 {
     mcp2515_modifyRegister(MCP_CANCTRL, ABORT_TX, ABORT_TX);
 
-    // Maybe check to see if the TX buffer transmission request bits are cleared instead?
     if ((mcp2515_readRegister(MCP_CANCTRL) & ABORT_TX) != ABORT_TX)
         return CAN_FAIL;
     else
